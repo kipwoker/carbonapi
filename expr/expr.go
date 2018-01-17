@@ -1161,6 +1161,80 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			}
 		}
 		return []*MetricData{&r}, err
+	case "reduceSeries", "reduce": //reduceSeries(seriesLists, reduceFunction, reduceNode, *reduceMatchers)
+		const matchersStartIndex = 3
+
+		if len(e.args) < matchersStartIndex + 1 {
+			return nil, ErrMissingArgument
+		}
+
+		seriesList, err := getSeriesArg(e.args[0], from, until, values)
+		if err != nil {
+			return nil, err
+		}
+
+		reduceFunction, err := getStringArg(e, 1)
+		if err != nil {
+			return nil, err
+		}
+
+		reduceNode, err := getIntArg(e, 2)
+		if err != nil {
+			return nil, err
+		}
+
+		argsCount := len(e.args)
+		matchersCount := argsCount - matchersStartIndex
+		reduceMatchers := make([]string, matchersCount)
+		for i := matchersStartIndex; i < argsCount; i++ {
+			reduceMatcher, err := getStringArg(e, i)
+			if err != nil {
+				return nil, err
+			}
+
+			reduceMatchers[i - matchersStartIndex] = reduceMatcher
+		}
+
+		var results []*MetricData
+
+		for _, series := range seriesList {
+			metric := extractMetric(series.Name)
+			nodes := strings.Split(metric, ".")
+
+			reducedNodes := make([]*expr, len(reduceMatchers))
+			for i, reduceMatcher := range reduceMatchers {
+				nodes[reduceNode] = reduceMatcher
+				reducedNodes[i] = &expr{target:strings.Join(nodes, ".")}
+			}
+
+			nodes[reduceNode] = "reduce." + reduceFunction
+			aliasName := strings.Join(nodes, ".")
+
+			r, err := EvalExpr(&expr {
+				target: "alias",
+				etype:  etFunc,
+				args: []*expr{
+					{
+						target: reduceFunction,
+						etype: etFunc,
+						args: reducedNodes,
+					},
+					{
+						valStr: aliasName,
+						etype: etString,
+					},
+				},
+			}, from, until, values)
+
+			if (err != nil) {
+				return nil, err
+			}
+
+			results = append(results, r...)
+		}
+
+		return results, nil
+
 
 	case "divideSeries": // divideSeries(dividendSeriesList, divisorSeriesList)
 		if len(e.args) < 1 {

@@ -1586,6 +1586,56 @@ func TestEvalExpression(t *testing.T) {
 		},
 		{
 			&expr{
+				target: "reduceSeries",
+				etype: etFunc,
+				args: []*expr{
+					{
+						target: "mapSeries",
+						etype:  etFunc,
+						args: []*expr{
+							{target: "servers.*.disk.*"},
+							{val: 1, etype: etConst},
+						},
+					},
+					{valStr: "asPercent", etype: etString},
+					{val: 3, etype: etConst},
+					{valStr: "bytes_used", etype: etString},
+					{valStr: "total_bytes", etype: etString},
+				},
+			},
+			map[MetricRequest][]*MetricData{
+				{"servers.*.disk.*", 0, 1}: {
+					makeResponse("servers.server1.disk.*", []float64{10, 6, 12}, 1, now32),
+					makeResponse("servers.server2.disk.*", []float64{15, 18, 15}, 1, now32),
+				},
+				{"servers.server1.disk.*", 0, 1}: {
+					makeResponse("servers.server1.disk.total_bytes", []float64{2, 4, 8}, 1, now32),
+					makeResponse("servers.server1.disk.bytes_used", []float64{8, 2, 4}, 1, now32),
+				},
+				{"servers.server2.disk.*", 0, 1}: {
+					makeResponse("servers.server2.disk.total_bytes", []float64{3, 9, 12}, 1, now32),
+					makeResponse("servers.server2.disk.bytes_used", []float64{12, 9, 3}, 1, now32),
+				},
+				{"servers.server1.disk.total_bytes", 0, 1}: {
+					makeResponse("servers.server1.disk.total_bytes", []float64{2, 4, 8}, 1, now32),
+				},
+				{"servers.server1.disk.bytes_used", 0, 1}: {
+					makeResponse("servers.server1.disk.bytes_used", []float64{8, 2, 4}, 1, now32),
+				},
+				{"servers.server2.disk.total_bytes", 0, 1}: {
+					makeResponse("servers.server2.disk.total_bytes", []float64{3, 9, 12}, 1, now32),
+				},
+				{"servers.server2.disk.bytes_used", 0, 1}: {
+					makeResponse("servers.server2.disk.bytes_used", []float64{12, 9, 3}, 1, now32),
+				},
+			},
+			[]*MetricData{
+				makeResponse("servers.server1.disk.reduce.asPercent", []float64{400, 50, 50}, 1, now32),
+				makeResponse("servers.server2.disk.reduce.asPercent", []float64{400, 100, 25}, 1, now32),
+			},
+		},
+		{
+			&expr{
 				target: "transformNull",
 				etype:  etFunc,
 				args: []*expr{
